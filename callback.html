@@ -1,63 +1,127 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spotify Login Callback</title>
-    <style>
-        body { font-family: sans-serif; background-color: #121212; color: #fff; text-align: center; padding: 50px 20px; }
-        .success { color: #1DB954; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-        .error { color: #e91429; font-size: 20px; font-weight: bold; margin-bottom: 20px; }
-        .code-box { background-color: #333; padding: 15px; border-radius: 8px; word-break: break-all; margin: 20px auto; max-width: 400px; font-family: monospace; font-size: 14px; user-select: all; }
-        button { background-color: #1DB954; color: #000; border: none; padding: 12px 24px; font-size: 16px; border-radius: 30px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        button:hover { background-color: #1ed760; }
-        p { color: #b3b3b3; line-height: 1.5; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotify Remote</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #121212;
+      color: #ffffff;
+    }
+
+    main {
+      box-sizing: border-box;
+      width: min(92vw, 460px);
+      padding: 32px 24px;
+      border-radius: 18px;
+      background: #1f1f1f;
+      text-align: center;
+      box-shadow: 0 14px 40px rgb(0 0 0 / 35%);
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-size: 1.45rem;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.55;
+      color: #d2d2d2;
+    }
+
+    .ok {
+      color: #1ed760;
+    }
+
+    .error {
+      color: #ff6b6b;
+    }
+  </style>
 </head>
 <body>
+  <main>
+    <h1 id="title">กำลังเชื่อม Spotify…</h1>
+    <p id="message">โปรดรอสักครู่ อย่าปิดหน้านี้</p>
+  </main>
 
-    <div id="statusMessage">กำลังประมวลผล...</div>
-    <div id="codeContainer" style="display:none;">
-        <div class="code-box" id="authCode"></div>
-        <button onclick="copyCode()">คัดลอกรหัส</button>
-        <p style="margin-top:20px; font-size:14px;">คัดลอกรหัสนี้แล้วนำไปวางในหน้าตั้งค่าของเครื่อง Audio Remote</p>
-    </div>
+  <script>
+    const API_BASE = "https://spotify-remote-api.wolrajt.workers.dev";
 
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        const error = urlParams.get('error');
+    const title = document.getElementById("title");
+    const message = document.getElementById("message");
 
-        const statusMsg = document.getElementById('statusMessage');
-        const codeContainer = document.getElementById('codeContainer');
-        const authCodeDisplay = document.getElementById('authCode');
+    function showError(text) {
+      title.textContent = "เชื่อม Spotify ไม่สำเร็จ";
+      title.className = "error";
+      message.textContent = text;
+    }
 
-        if (error) {
-            statusMsg.innerHTML = '<span class="error">การเข้าสู่ระบบล้มเหลว</span>';
-            statusMsg.innerHTML += '<p>Spotify ส่งข้อผิดพลาด: ' + error + '</p>';
-        } else if (code) {
-            statusMsg.innerHTML = '<span class="success">Spotify Login Success!</span>';
-            authCodeDisplay.textContent = code;
-            codeContainer.style.display = 'block';
-        } else {
-            statusMsg.innerHTML = '<span class="error">ไม่พบรหัสยืนยันตัวตน</span>';
-            statusMsg.innerHTML += '<p>กรุณาลองเข้าสู่ระบบใหม่อีกครั้งจากหน้าตั้งค่าของอุปกรณ์</p>';
+    function showSuccess() {
+      title.textContent = "เชื่อม Spotify สำเร็จ";
+      title.className = "ok";
+      message.textContent =
+        "กลับไปที่ Spotify Remote ได้เลย อุปกรณ์จะตรวจพบการเชื่อมต่อเอง";
+    }
+
+    async function completeSpotifyLogin() {
+      const params = new URLSearchParams(window.location.search);
+      const spotifyError = params.get("error");
+      const code = params.get("code");
+      const state = params.get("state");
+
+      if (spotifyError) {
+        showError("Spotify ยกเลิกหรือปฏิเสธการอนุญาต: " + spotifyError);
+        return;
+      }
+
+      if (!code || !state) {
+        showError(
+          "ไม่พบข้อมูลการเชื่อมบัญชี กลับไปที่อุปกรณ์แล้วเริ่ม Connect Spotify ใหม่"
+        );
+        return;
+      }
+
+      try {
+        const response = await fetch(API_BASE + "/v1/spotify/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ code, state })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          showError(
+            result.error ||
+            "ไม่สามารถบันทึกการเชื่อม Spotify ได้ กลับไปที่อุปกรณ์แล้วลองใหม่"
+          );
+          return;
         }
 
-        function copyCode() {
-            const range = document.createRange();
-            range.selectNode(authCodeDisplay);
-            window.getSelection().removeAllRanges();
-            window.getSelection().addRange(range);
-            try {
-                document.execCommand('copy');
-                alert('คัดลอกรหัสเรียบร้อยแล้ว!');
-            } catch (err) {
-                alert('ไม่สามารถคัดลอกได้อัตโนมัติ กรุณาเลือกคลุมรหัสและคัดลอกด้วยตนเอง');
-            }
-            window.getSelection().removeAllRanges();
-        }
-    </script>
+        /* ลบรหัสใช้ครั้งเดียวออกจากแถบที่อยู่ของเบราว์เซอร์ */
+        window.history.replaceState({}, document.title, window.location.pathname);
+        showSuccess();
+      } catch (error) {
+        showError(
+          "ติดต่อบริการเชื่อม Spotify ไม่ได้ ตรวจอินเทอร์เน็ตแล้วลองใหม่"
+        );
+      }
+    }
 
+    completeSpotifyLogin();
+  </script>
 </body>
 </html>
